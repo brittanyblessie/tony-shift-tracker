@@ -257,25 +257,27 @@ with tab1:
             key="f_date"
         )
 
-        # Shift type + role
-        st.markdown("**Shift type**")
-        col_shift, col_role = st.columns([2, 1])
+        # Shift type + role — matching radio buttons, no default
+        col_shift, col_role = st.columns(2)
         with col_shift:
+            st.markdown("**Shift type**")
             shift_type = st.radio(
                 "Shift type",
                 ["☀️ Day shift", "🌙 Night shift"],
-                index=0,
+                index=None,
                 horizontal=True,
                 label_visibility="collapsed",
                 key="f_shift"
             )
         with col_role:
-            role = st.selectbox(
+            st.markdown("**Role**")
+            role = st.radio(
                 "Role",
                 ["🍹 Bartender", "🍽️ Server"],
-                index=0,
-                key="f_role",
-                label_visibility="collapsed"
+                index=None,
+                horizontal=True,
+                label_visibility="collapsed",
+                key="f_role"
             )
 
         # Clock in / out — smart text input, no military time
@@ -371,6 +373,10 @@ with tab1:
             errors.append("🕐 Clock out is required — try something like 4pm or 330pm.")
         if tips is None or tips <= 0:
             errors.append("💵 Tips earned is required — enter the amount you made in tips.")
+        if shift_type is None:
+            errors.append("☀️ Please select a shift type.")
+        if role is None:
+            errors.append("🍹 Please select your role — Bartender or Server.")
         if busy is None:
             errors.append("🔥 Please select how busy it was.")
         if errors:
