@@ -64,17 +64,21 @@ def get_sheet():
         worksheet.append_row(SHEET_HEADERS)
     return worksheet
 
+@st.cache_data(ttl=30)
 def load_data():
     try:
         ws = get_sheet()
-        data = ws.get_all_records()
+        data = ws.get_all_records(expected_headers=SHEET_HEADERS)
         if not data:
             return pd.DataFrame(columns=SHEET_HEADERS)
         df = pd.DataFrame(data)
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        for col in ["All Sales", "Tip Out", "Tips Earned", "Wages",
-                    "Total Earned", "Tax Set Aside", "Retirement Set Aside",
-                    "Hours Worked", "Covers"]:
+        numeric_cols = ["All Sales", "Tip Out", "Tips Earned", "Wages",
+                        "Total Earned", "Tax Owed", "Wages Cover Tax",
+                        "Tips Tax Set Aside", "Retirement Set Aside",
+                        "Take Home Tips", "Take Home Wages", "Take Home Total",
+                        "Hours Worked", "Covers"]
+        for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         return df
@@ -452,6 +456,7 @@ with tab1:
                     "all_sales": all_sales, "tip_out": tip_out
                 }
                 st.cache_resource.clear()
+                load_data.clear()
                 for key in ["f_date","f_shift","f_role","f_clock_in","f_clock_out",
                             "f_sales","f_tipout","f_tips","f_busy",
                             "f_covers","f_holiday","f_double","f_notes"]:
@@ -586,7 +591,7 @@ with tab2:
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("🏠 Take-home total",  f"${year_total:,.2f}")
     c6.metric("💵 Take-home tips",   f"${year_tips:,.2f}")
-    c7.metric("🏦 Tax set aside", f"${year_df['Tax Set Aside'].sum():,.2f}")
+    c7.metric("🏦 Tax set aside", f"${year_df[tax_col].sum():,.2f}")
     c8.metric("📈 Retirement",    f"${year_df['Retirement Set Aside'].sum():,.2f}")
 
     st.markdown("---")
@@ -605,12 +610,12 @@ with tab2:
     display_df = df.copy()
     display_df["Date"] = display_df["Date"].dt.strftime("%m/%d/%Y")
     for col in ["All Sales", "Tip Out", "Tips Earned", "Wages",
-                "Total Earned", "Tax Set Aside", "Retirement Set Aside"]:
+                "Total Earned", "Tips Tax Set Aside", "Retirement Set Aside"]:
         if col in display_df.columns:
             display_df[col] = display_df[col].apply(lambda x: f"${x:,.2f}")
     show_cols = ["Date", "Shift Type", "Clock In", "Clock Out", "Hours Worked",
                  "All Sales", "Tip Out", "Tips Earned", "Wages", "Total Earned",
-                 "Tax Set Aside", "Retirement Set Aside", "Busy Rating", "Covers", "Notes"]
+                 "Tips Tax Set Aside", "Retirement Set Aside", "Busy Rating", "Covers", "Notes"]
     show_cols = [c for c in show_cols if c in display_df.columns]
     st.dataframe(display_df[show_cols], use_container_width=True, hide_index=True)
 
@@ -674,7 +679,7 @@ with tab3:
 
             c8, c9, c10 = st.columns(3)
             c8.markdown(f"**Wages**\n\n${row.get('Wages', 0):.2f}")
-            c9.markdown(f"**Tax set aside**\n\n${row.get('Tax Set Aside', 0):.2f}")
+            c9.markdown(f"**Tax set aside**\n\n${row.get('Tips Tax Set Aside', row.get('Tax Set Aside', 0)):.2f}")
             c10.markdown(f"**Retirement**\n\n${row.get('Retirement Set Aside', 0):.2f}")
 
             if row.get("Notes"):
