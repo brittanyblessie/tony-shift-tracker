@@ -258,23 +258,30 @@ with tab1:
         )
 
         # Clock in / out — smart text input, no military time
+        def to_12h(t):
+            return t.strftime("%I:%M %p").lstrip("0")
+
         st.markdown("**Clock in / Clock out**")
         st.caption("Just type it simply — like **11am**, **4pm**, **330pm**, or **1145am**")
         col1, col2 = st.columns(2)
         with col1:
-            clock_in_raw  = st.text_input("Clock in",  placeholder="e.g. 11am", key="f_clock_in")
+            clock_in_raw = st.text_input("Clock in", placeholder="e.g. 11am", key="f_clock_in")
+            clock_in = parse_time_12h(clock_in_raw)
+            if clock_in_raw and clock_in:
+                st.success(f"✓ {to_12h(clock_in)}")
+            elif clock_in_raw:
+                st.error("Couldn't read that. Try 11am or 1130am")
         with col2:
-            clock_out_raw = st.text_input("Clock out", placeholder="e.g. 4pm",  key="f_clock_out")
+            clock_out_raw = st.text_input("Clock out", placeholder="e.g. 4pm", key="f_clock_out")
+            clock_out = parse_time_12h(clock_out_raw)
+            if clock_out_raw and clock_out:
+                st.success(f"✓ {to_12h(clock_out)}")
+            elif clock_out_raw:
+                st.error("Couldn't read that. Try 4pm or 330pm")
 
-        clock_in  = parse_time_12h(clock_in_raw)
-        clock_out = parse_time_12h(clock_out_raw)
         if clock_in and clock_out:
             hours_preview = calc_hours(clock_in, clock_out)
-            def to_12h(t):
-                return t.strftime("%I:%M %p").lstrip("0")
             st.caption(f"⏰ {to_12h(clock_in)} → {to_12h(clock_out)}  ·  {hours_preview:.2f} hrs worked")
-        elif clock_in_raw or clock_out_raw:
-            st.caption("Hmm, couldn't read that time. Try something like 11am or 330pm")
 
         # Sales section
         st.markdown("**Sales**")
