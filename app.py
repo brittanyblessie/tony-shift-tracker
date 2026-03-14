@@ -236,18 +236,10 @@ with tab1:
         c16.metric("Retirement set aside this month", f"${month_df[ret_col].sum():.2f}")
 
         st.markdown("---")
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("📋 Log another shift", use_container_width=True):
-                st.session_state.submitted  = False
-                st.session_state.last_entry = {}
-                st.rerun()
-        with col_btn2:
-            if st.button("📊 Go to Dashboard", use_container_width=True):
-                st.session_state.submitted  = False
-                st.session_state.last_entry = {}
-                st.session_state.active_tab = "dashboard"
-                st.rerun()
+        if st.button("📋 Log another shift", use_container_width=True):
+            st.session_state.submitted  = False
+            st.session_state.last_entry = {}
+            st.rerun()
         st.stop()
 
     # ── Form (no st.form wrapper — prevents enter-to-submit) ─────────────────
