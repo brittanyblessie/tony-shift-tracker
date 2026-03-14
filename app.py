@@ -215,15 +215,19 @@ with tab1:
 
         # Clock in / out — native time picker
         st.markdown("**Clock in / Clock out**")
+        st.caption("⏱️ Round down to the nearest :00 or :15 — e.g. if you got off at 9:18 PM choose 9:15 PM")
         col1, col2 = st.columns(2)
         with col1:
-            clock_in  = st.time_input("Clock in",  value=None, key="f_clock_in")
+            clock_in  = st.time_input("Clock in",  value=None, step=60*15, key="f_clock_in")
         with col2:
-            clock_out = st.time_input("Clock out", value=None, key="f_clock_out")
+            clock_out = st.time_input("Clock out", value=None, step=60*15, key="f_clock_out")
 
         if clock_in and clock_out:
             hours_preview = calc_hours(clock_in, clock_out)
-            st.caption(f"Hours worked: {hours_preview:.2f} hrs")
+            # Display in 12-hour format
+            def to_12h(t):
+                return t.strftime("%I:%M %p").lstrip("0")
+            st.caption(f"Hours worked: {hours_preview:.2f} hrs  ·  {to_12h(clock_in)} → {to_12h(clock_out)}")
 
         # Sales section
         st.markdown("**Sales**")
