@@ -377,8 +377,8 @@ with tab2:
     # ── Goals (editable in sidebar) ───────────────────────────────────────────
     with st.sidebar:
         st.markdown("### 🎯 Monthly goals")
-        tip_goal   = st.number_input("Tip goal ($)",           min_value=0, value=2000, step=100)
-        total_goal = st.number_input("Total earnings goal ($)", min_value=0, value=3000, step=100)
+        tip_goal   = st.number_input("Tip goal ($)",           min_value=0, value=3000, step=100)
+        total_goal = st.number_input("Total earnings goal ($)", min_value=0, value=5000, step=100)
 
     # ── Motivational message ──────────────────────────────────────────────────
     tip_pct = (month_tips / tip_goal * 100) if tip_goal > 0 else 0
@@ -393,7 +393,7 @@ with tab2:
     else:
         msg = "✨ The month is young! Time to show them what you've got Tony!"
 
-    st.markdown(f"## {msg}")
+    st.markdown(f"##### {msg}")
     st.markdown("---")
 
     # ── Big colorful metric cards ─────────────────────────────────────────────
