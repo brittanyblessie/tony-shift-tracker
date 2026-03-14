@@ -353,14 +353,16 @@ with tab1:
     if submitted:
         # Validate required fields
         errors = []
-        if clock_in is None:
-            errors.append("Clock in time is not valid. Try something like 11:30 AM.")
-        if clock_out is None:
-            errors.append("Clock out time is not valid. Try something like 4:00 PM.")
+        if not shift_date:
+            errors.append("📅 Date is required.")
+        if not clock_in_raw or clock_in is None:
+            errors.append("🕐 Clock in is required — try something like 11am or 1130am.")
+        if not clock_out_raw or clock_out is None:
+            errors.append("🕐 Clock out is required — try something like 4pm or 330pm.")
         if tips is None or tips <= 0:
-            errors.append("Tips earned is required. Enter the amount you made in tips.")
+            errors.append("💵 Tips earned is required — enter the amount you made in tips.")
         if busy is None:
-            errors.append("Please select how busy it was.")
+            errors.append("🔥 Please select how busy it was.")
         if errors:
             for e in errors:
                 st.error(e)
