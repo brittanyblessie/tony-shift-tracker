@@ -30,7 +30,7 @@ TAX_RATE        = 0.3865          # federal 22% + CA state 9.3% + FICA 7.65%
 RETIREMENT_PCT  = 0.10
 SHEET_URL       = "https://docs.google.com/spreadsheets/d/146EL7E7DLj-RADnlTj4cz2tTNbwjV_IS_2ssv2ffs5I/edit"
 CREDS_FILE      = "tony-shift-tracker.json"
-SHEET_HEADERS   = ["Timestamp", "Date", "Shift Type", "Clock In", "Clock Out",
+SHEET_HEADERS   = ["Timestamp", "Date", "Shift Type", "Role", "Clock In", "Clock Out",
                    "Hours Worked", "All Sales", "Tip Out", "Tips Earned",
                    "Wages", "Total Earned", "Tax Owed", "Wages Cover Tax",
                    "Tips Tax Set Aside", "Retirement Set Aside",
@@ -257,16 +257,26 @@ with tab1:
             key="f_date"
         )
 
-        # Shift type — default Day shift
+        # Shift type + role
         st.markdown("**Shift type**")
-        shift_type = st.radio(
-            "Shift type",
-            ["☀️ Day shift", "🌙 Night shift"],
-            index=0,
-            horizontal=True,
-            label_visibility="collapsed",
-            key="f_shift"
-        )
+        col_shift, col_role = st.columns([2, 1])
+        with col_shift:
+            shift_type = st.radio(
+                "Shift type",
+                ["☀️ Day shift", "🌙 Night shift"],
+                index=0,
+                horizontal=True,
+                label_visibility="collapsed",
+                key="f_shift"
+            )
+        with col_role:
+            role = st.selectbox(
+                "Role",
+                ["🍹 Bartender", "🍽️ Server"],
+                index=0,
+                key="f_role",
+                label_visibility="collapsed"
+            )
 
         # Clock in / out — smart text input, no military time
         def to_12h(t):
@@ -398,6 +408,7 @@ with tab1:
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 shift_date.strftime("%m/%d/%Y"),
                 shift_type.split(" ", 1)[1],
+                role.split(" ", 1)[1],
                 clock_in_str,
                 clock_out_str,
                 hours,
@@ -435,7 +446,7 @@ with tab1:
                     "all_sales": all_sales, "tip_out": tip_out
                 }
                 st.cache_resource.clear()
-                for key in ["f_date","f_shift","f_clock_in","f_clock_out",
+                for key in ["f_date","f_shift","f_role","f_clock_in","f_clock_out",
                             "f_sales","f_tipout","f_tips","f_busy",
                             "f_covers","f_holiday","f_double","f_notes"]:
                     if key in st.session_state:
