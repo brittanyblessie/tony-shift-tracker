@@ -13,6 +13,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date, time
 import pandas as pd
+import json
+import os
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -40,7 +42,18 @@ def get_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = Credentials.from_service_account_file(CREDS_FILE, scopes=scope)
+    # Use Streamlit secrets when deployed, fall back to local JSON file
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=scope
+            )
+        else:
+            creds = Credentials.from_service_account_file(CREDS_FILE, scopes=scope)
+    except Exception as e:
+        st.error(f"Credentials error: {e}")
+        st.stop()
     client = gspread.authorize(creds)
     sh = client.open_by_url(SHEET_URL)
     worksheet = sh.sheet1
@@ -89,6 +102,10 @@ if "submitted" not in st.session_state:
     st.session_state.submitted = False
 if "last_entry" not in st.session_state:
     st.session_state.last_entry = {}
+if "clock_in_val" not in st.session_state:
+    st.session_state.clock_in_val = ""
+if "clock_out_val" not in st.session_state:
+    st.session_state.clock_out_val = ""
 
 # ── Password screen ───────────────────────────────────────────────────────────
 if not st.session_state.authenticated:
@@ -184,12 +201,12 @@ with tab1:
         )
 
         # Clock in / out — typeable 12-hour text fields
-        st.markdown("**Clock in / Clock out** (type time, e.g. 11:30 AM or 4:00 PM)")
+        st.markdown("**Clock in / Clock out** (e.g. 11:30 AM or 4:00 PM)")
         col1, col2 = st.columns(2)
         with col1:
-            clock_in_raw  = st.text_input("Clock in",  value="11:30 AM", placeholder="e.g. 11:30 AM")
+            clock_in_raw  = st.text_input("Clock in",  value="", placeholder="e.g. 11:30 AM", key="clock_in_val")
         with col2:
-            clock_out_raw = st.text_input("Clock out", value="4:00 PM",  placeholder="e.g. 4:00 PM")
+            clock_out_raw = st.text_input("Clock out", value="", placeholder="e.g. 4:00 PM",  key="clock_out_val")
 
         # Parse and preview hours
         def parse_time_12h(s):
@@ -225,9 +242,9 @@ with tab1:
             )
 
         tips = st.number_input(
-            "Tips earned ($)",
-            min_value=0.0, step=0.01, format="%.2f",
-            help="Your actual tips after tip out"
+            "Tips earned ($) *",
+            min_value=0.0, step=0.01, format="%.2f", value=None,
+            help="Your actual tips after tip out — required"
         )
 
         # Busy rating — no default, Tony must choose
@@ -316,6 +333,8 @@ with tab1:
                     "tip_out": tip_out
                 }
                 st.cache_resource.clear()
+                st.session_state.clock_in_val  = ""
+                st.session_state.clock_out_val = ""
                 st.rerun()
             except Exception as ex:
                 st.error(f"Could not save shift: {ex}")
