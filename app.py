@@ -91,6 +91,17 @@ def calc_hours(clock_in_t, clock_out_t):
     except:
         return 0.0
 
+def parse_time_12h(s):
+    if not s:
+        return None
+    for fmt in ["%I:%M %p", "%I:%M%p", "%H:%M", "%I %p", "%I%p",
+                "%I:%M", "%-I:%M %p", "%-I %p"]:
+        try:
+            return datetime.strptime(s.strip().upper(), fmt).time()
+        except:
+            continue
+    return None
+
 def fmt_12h(t):
     """Format a time object as 12-hour string for display."""
     return t.strftime("%I:%M %p").lstrip("0")
@@ -180,14 +191,15 @@ with tab1:
             st.rerun()
         st.stop()
 
-    # ── Form ──────────────────────────────────────────────────────────────────
-    with st.form("shift_form", clear_on_submit=True):
+    # ── Form (no st.form wrapper — prevents enter-to-submit) ─────────────────
+    with st.container():
 
         # Date — shown as MM/DD/YYYY
         shift_date = st.date_input(
             "Date",
             value=date.today(),
-            format="MM/DD/YYYY"
+            format="MM/DD/YYYY",
+            key="f_date"
         )
 
         # Shift type — default Day shift
@@ -197,33 +209,21 @@ with tab1:
             ["☀️ Day shift", "🌙 Night shift"],
             index=0,
             horizontal=True,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="f_shift"
         )
 
-        # Clock in / out — typeable 12-hour text fields
-        st.markdown("**Clock in / Clock out** (e.g. 11:30 AM or 4:00 PM)")
+        # Clock in / out — native time picker
+        st.markdown("**Clock in / Clock out**")
         col1, col2 = st.columns(2)
         with col1:
-            clock_in_raw  = st.text_input("Clock in",  value="", placeholder="e.g. 11:30 AM", key="clock_in_val")
+            clock_in  = st.time_input("Clock in",  value=None, key="f_clock_in")
         with col2:
-            clock_out_raw = st.text_input("Clock out", value="", placeholder="e.g. 4:00 PM",  key="clock_out_val")
+            clock_out = st.time_input("Clock out", value=None, key="f_clock_out")
 
-        # Parse and preview hours
-        def parse_time_12h(s):
-            for fmt in ["%I:%M %p", "%I:%M%p", "%H:%M", "%I %p", "%I%p"]:
-                try:
-                    return datetime.strptime(s.strip().upper(), fmt).time()
-                except:
-                    continue
-            return None
-
-        clock_in  = parse_time_12h(clock_in_raw)
-        clock_out = parse_time_12h(clock_out_raw)
         if clock_in and clock_out:
             hours_preview = calc_hours(clock_in, clock_out)
             st.caption(f"Hours worked: {hours_preview:.2f} hrs")
-        else:
-            st.caption("Enter times like 11:30 AM and 4:00 PM")
 
         # Sales section
         st.markdown("**Sales**")
@@ -232,19 +232,22 @@ with tab1:
             all_sales = st.number_input(
                 "All sales ($)",
                 min_value=0.0, step=0.01, format="%.2f",
-                help="Total sales for your section today"
+                help="Total sales for your section today",
+                key="f_sales"
             )
         with col4:
             tip_out = st.number_input(
                 "Tip out ($)",
                 min_value=0.0, step=0.01, format="%.2f",
-                help="Amount tipped out to support staff"
+                help="Amount tipped out to support staff",
+                key="f_tipout"
             )
 
         tips = st.number_input(
-            "Tips earned ($) *",
-            min_value=0.0, step=0.01, format="%.2f", value=None,
-            help="Your actual tips after tip out — required"
+            "Tips earned ($)",
+            min_value=0.0, step=0.01, format="%.2f",
+            help="Your actual tips after tip out",
+            key="f_tips"
         )
 
         # Busy rating — no default, Tony must choose
@@ -254,26 +257,29 @@ with tab1:
             ["😴 Slow", "🙂 Normal", "😤 Busy", "🔥 Slammed"],
             index=None,
             horizontal=True,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="f_busy"
         )
 
         # Covers
         covers = st.number_input(
             "How many covers did the restaurant have?",
-            min_value=0, step=1, value=0
+            min_value=0, step=1, value=0,
+            key="f_covers"
         )
 
         # Special shift flags
         st.markdown("**Special shift?**")
-        is_holiday = st.checkbox("🎉 Holiday shift", value=False)
-        is_double  = st.checkbox("⚡ This shift is part of a double shift", value=False)
+        is_holiday = st.checkbox("🎉 Holiday shift", value=False, key="f_holiday")
+        is_double  = st.checkbox("⚡ This shift is part of a double shift", value=False, key="f_double")
 
         notes = st.text_input(
             "Notes (optional)",
-            placeholder="e.g. special event, training, private party..."
+            placeholder="e.g. special event, training, private party...",
+            key="f_notes"
         )
 
-        submitted = st.form_submit_button("Log my shift! 💪", use_container_width=True)
+        submitted = st.button("Log my shift! 💪", use_container_width=True, key="f_submit")
 
     if submitted:
         # Validate required fields
@@ -282,7 +288,7 @@ with tab1:
             errors.append("Clock in time is not valid. Try something like 11:30 AM.")
         if clock_out is None:
             errors.append("Clock out time is not valid. Try something like 4:00 PM.")
-        if tips <= 0:
+        if tips is None or tips <= 0:
             errors.append("Tips earned is required. Enter the amount you made in tips.")
         if busy is None:
             errors.append("Please select how busy it was.")
@@ -298,8 +304,8 @@ with tab1:
             expected_wage_tax = round(wages * TAX_RATE, 2)
             tax_gap       = max(0, round(expected_wage_tax - wages, 2))
 
-            clock_in_str  = clock_in_raw.strip()
-            clock_out_str = clock_out_raw.strip()
+            clock_in_str  = clock_in.strftime("%I:%M %p").lstrip("0")
+            clock_out_str = clock_out.strftime("%I:%M %p").lstrip("0")
 
             row = [
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -333,8 +339,11 @@ with tab1:
                     "tip_out": tip_out
                 }
                 st.cache_resource.clear()
-                st.session_state.clock_in_val  = ""
-                st.session_state.clock_out_val = ""
+                for key in ["f_date","f_shift","f_clock_in","f_clock_out",
+                            "f_sales","f_tipout","f_tips","f_busy",
+                            "f_covers","f_holiday","f_double","f_notes"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.rerun()
             except Exception as ex:
                 st.error(f"Could not save shift: {ex}")
