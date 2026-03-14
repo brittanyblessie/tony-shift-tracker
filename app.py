@@ -215,7 +215,7 @@ with tab1:
 
         # Clock in / out — native time picker
         st.markdown("**Clock in / Clock out**")
-        st.caption("⏱️ Round down to the nearest :00 or :15 — e.g. if you got off at 9:18 PM choose 9:15 PM")
+        st.caption("⏱️ Round down to the nearest 15 minute increment — e.g. if you got off at 9:18 choose 9:15")
         col1, col2 = st.columns(2)
         with col1:
             clock_in  = st.time_input("Clock in",  value=None, step=60*15, key="f_clock_in")
