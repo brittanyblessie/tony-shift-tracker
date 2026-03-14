@@ -370,16 +370,19 @@ with tab1:
             hours             = calc_hours(clock_in, clock_out)
             wages             = round(hours * HOURLY_RATE, 2)
             gross_total       = round(tips + wages, 2)
-            # Total tax owed on everything
-            tax_owed          = round(gross_total * TAX_RATE, 2)
-            # Wages are fully absorbed covering taxes first
+            # Taxable tips = tips minus tip out (tip out is not Tony's income)
+            taxable_tips      = max(0, round(tips - tip_out, 2))
+            taxable_total     = round(wages + taxable_tips, 2)
+            # Total tax owed only on taxable income
+            tax_owed          = round(taxable_total * TAX_RATE, 2)
+            # Wages absorb taxes first
             wages_cover_tax   = min(wages, tax_owed)
-            # Remaining tax after wages absorbed = what Tony sets aside from tips
+            # Remaining tax Tony sets aside from tips
             tips_tax_set_aside = max(0, round(tax_owed - wages_cover_tax, 2))
-            # Retirement on gross total
-            retirement        = round(gross_total * RETIREMENT_PCT, 2)
-            # Take home = gross minus tax owed minus retirement
-            take_home_tips    = round(tips - tips_tax_set_aside - retirement, 2)
+            # Retirement on taxable total
+            retirement        = round(taxable_total * RETIREMENT_PCT, 2)
+            # Take home
+            take_home_tips    = round(taxable_tips - tips_tax_set_aside - retirement, 2)
             take_home_wages   = max(0, round(wages - wages_cover_tax, 2))
             take_home_total   = round(take_home_tips + take_home_wages, 2)
             # Legacy alias for summary display
