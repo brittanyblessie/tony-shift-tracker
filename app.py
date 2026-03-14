@@ -32,7 +32,9 @@ SHEET_URL       = "https://docs.google.com/spreadsheets/d/146EL7E7DLj-RADnlTj4cz
 CREDS_FILE      = "tony-shift-tracker.json"
 SHEET_HEADERS   = ["Timestamp", "Date", "Shift Type", "Clock In", "Clock Out",
                    "Hours Worked", "All Sales", "Tip Out", "Tips Earned",
-                   "Wages", "Total Earned", "Tax Set Aside", "Retirement Set Aside",
+                   "Wages", "Total Earned", "Tax Owed", "Wages Cover Tax",
+                   "Tips Tax Set Aside", "Retirement Set Aside",
+                   "Take Home Tips", "Take Home Wages", "Take Home Total",
                    "Busy Rating", "Covers", "Holiday Shift", "Double Shift", "Notes"]
 
 # ── Google Sheets connection ──────────────────────────────────────────────────
@@ -182,24 +184,28 @@ with tab1:
         st.success("Shift logged! Great work! 🎉")
         st.markdown("---")
 
-        st.markdown("#### This shift")
+        st.markdown("#### This shift — gross")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Tips earned",  f"${e['tips']:.2f}")
-        c2.metric("Wages",        f"${e['wages']:.2f}")
-        c3.metric("Total earned", f"${e['total']:.2f}")
+        c1.metric("💵 Tips earned",   f"${e['tips']:.2f}")
+        c2.metric("💼 Wages",         f"${e['wages']:.2f}")
+        c3.metric("📊 Gross total",   f"${e['gross_total']:.2f}")
 
         if e.get("all_sales", 0) > 0:
             c4, c5 = st.columns(2)
             c4.metric("All sales",  f"${e['all_sales']:.2f}")
             c5.metric("Tip out",    f"${e['tip_out']:.2f}")
 
-        st.markdown("#### Set aside from this shift")
+        st.markdown("#### What to set aside")
+        st.caption("💼 Your wages are absorbed by taxes — employer handles that part")
         c6, c7 = st.columns(2)
-        c6.metric("For taxes 🏦",      f"${e['tax']:.2f}")
-        c7.metric("For retirement 📈", f"${e['retirement']:.2f}")
+        c6.metric("🏦 Save from tips for taxes", f"${e['tips_tax_set_aside']:.2f}")
+        c7.metric("📈 Save for retirement",       f"${e['retirement']:.2f}")
 
-        if e.get("tax_gap", 0) > 0:
-            st.warning(f"⚠️ Heads up — consider setting aside an extra **${e['tax_gap']:.2f}** from tips to cover taxes this shift.")
+        st.markdown("#### Your take-home 🎉")
+        c8, c9, c10 = st.columns(3)
+        c8.metric("💵 Take-home tips",  f"${e['take_home_tips']:.2f}")
+        c9.metric("💼 Take-home wages", f"${e['take_home_wages']:.2f}")
+        c10.metric("🏠 In your pocket", f"${e['take_home_total']:.2f}")
 
         st.markdown("---")
         st.markdown("#### Your running totals")
@@ -208,17 +214,22 @@ with tab1:
         month_df = df[df["Date"].dt.month == now.month] if not df.empty else df
         year_df  = df[df["Date"].dt.year  == now.year]  if not df.empty else df
 
-        c8, c9 = st.columns(2)
-        c8.metric("Tips this month", f"${month_df['Tips Earned'].sum():.2f}")
-        c9.metric("Tips this year",  f"${year_df['Tips Earned'].sum():.2f}")
+        th_tips_col  = "Take Home Tips"  if "Take Home Tips"  in df.columns else "Tips Earned"
+        th_total_col = "Take Home Total" if "Take Home Total" in df.columns else "Total Earned"
+        tax_col      = "Tips Tax Set Aside" if "Tips Tax Set Aside" in df.columns else "Tax Set Aside"
+        ret_col      = "Retirement Set Aside"
 
-        c10, c11 = st.columns(2)
-        c10.metric("Total earned this month", f"${month_df['Total Earned'].sum():.2f}")
-        c11.metric("Total earned this year",  f"${year_df['Total Earned'].sum():.2f}")
+        c11, c12 = st.columns(2)
+        c11.metric("Take-home tips this month", f"${month_df[th_tips_col].sum():.2f}")
+        c12.metric("Take-home tips this year",  f"${year_df[th_tips_col].sum():.2f}")
 
-        c12, c13 = st.columns(2)
-        c12.metric("Tax set aside this month",        f"${month_df['Tax Set Aside'].sum():.2f}")
-        c13.metric("Retirement set aside this month", f"${month_df['Retirement Set Aside'].sum():.2f}")
+        c13, c14 = st.columns(2)
+        c13.metric("Total in pocket this month", f"${month_df[th_total_col].sum():.2f}")
+        c14.metric("Total in pocket this year",  f"${year_df[th_total_col].sum():.2f}")
+
+        c15, c16 = st.columns(2)
+        c15.metric("Tax set aside this month",        f"${month_df[tax_col].sum():.2f}")
+        c16.metric("Retirement set aside this month", f"${month_df[ret_col].sum():.2f}")
 
         st.markdown("---")
         col_btn1, col_btn2 = st.columns(2)
@@ -354,13 +365,24 @@ with tab1:
             for e in errors:
                 st.error(e)
         else:
-            hours         = calc_hours(clock_in, clock_out)
-            wages         = round(hours * HOURLY_RATE, 2)
-            total         = round(tips + wages, 2)
-            tax_set_aside = round(tips * TAX_RATE, 2)
-            retirement    = round(total * RETIREMENT_PCT, 2)
-            expected_wage_tax = round(wages * TAX_RATE, 2)
-            tax_gap       = max(0, round(expected_wage_tax - wages, 2))
+            hours             = calc_hours(clock_in, clock_out)
+            wages             = round(hours * HOURLY_RATE, 2)
+            gross_total       = round(tips + wages, 2)
+            # Total tax owed on everything
+            tax_owed          = round(gross_total * TAX_RATE, 2)
+            # Wages are fully absorbed covering taxes first
+            wages_cover_tax   = min(wages, tax_owed)
+            # Remaining tax after wages absorbed = what Tony sets aside from tips
+            tips_tax_set_aside = max(0, round(tax_owed - wages_cover_tax, 2))
+            # Retirement on gross total
+            retirement        = round(gross_total * RETIREMENT_PCT, 2)
+            # Take home = gross minus tax owed minus retirement
+            take_home_tips    = round(tips - tips_tax_set_aside - retirement, 2)
+            take_home_wages   = max(0, round(wages - wages_cover_tax, 2))
+            take_home_total   = round(take_home_tips + take_home_wages, 2)
+            # Legacy alias for summary display
+            tax_set_aside     = tips_tax_set_aside
+            total             = gross_total
 
             def to_12h(t):
                 return t.strftime("%I:%M %p").lstrip("0")
@@ -378,9 +400,14 @@ with tab1:
                 tip_out,
                 tips,
                 wages,
-                total,
-                tax_set_aside,
+                gross_total,
+                tax_owed,
+                wages_cover_tax,
+                tips_tax_set_aside,
                 retirement,
+                take_home_tips,
+                take_home_wages,
+                take_home_total,
                 busy.split(" ", 1)[1],
                 covers,
                 "Yes" if is_holiday else "No",
@@ -393,10 +420,14 @@ with tab1:
                 ws.append_row(row)
                 st.session_state.submitted  = True
                 st.session_state.last_entry = {
-                    "tips": tips, "wages": wages, "total": total,
-                    "tax": tax_set_aside, "retirement": retirement,
-                    "tax_gap": tax_gap, "all_sales": all_sales,
-                    "tip_out": tip_out
+                    "tips": tips, "wages": wages, "gross_total": gross_total,
+                    "tax_owed": tax_owed, "wages_cover_tax": wages_cover_tax,
+                    "tips_tax_set_aside": tips_tax_set_aside,
+                    "retirement": retirement,
+                    "take_home_tips": take_home_tips,
+                    "take_home_wages": take_home_wages,
+                    "take_home_total": take_home_total,
+                    "all_sales": all_sales, "tip_out": tip_out
                 }
                 st.cache_resource.clear()
                 for key in ["f_date","f_shift","f_clock_in","f_clock_out",
@@ -422,13 +453,18 @@ with tab2:
     month_df = df[df["Date"].dt.month == now.month]
     year_df  = df[df["Date"].dt.year  == now.year]
 
-    month_tips  = month_df["Tips Earned"].sum()
-    month_total = month_df["Total Earned"].sum()
-    month_tax   = month_df["Tax Set Aside"].sum()
+    # Use take-home columns if available, fall back to gross for old data
+    th_tips_col  = "Take Home Tips"  if "Take Home Tips"  in df.columns else "Tips Earned"
+    th_total_col = "Take Home Total" if "Take Home Total" in df.columns else "Total Earned"
+    tax_col      = "Tips Tax Set Aside" if "Tips Tax Set Aside" in df.columns else "Tax Set Aside"
+
+    month_tips  = month_df[th_tips_col].sum()
+    month_total = month_df[th_total_col].sum()
+    month_tax   = month_df[tax_col].sum()
     month_ret   = month_df["Retirement Set Aside"].sum()
     month_shifts= len(month_df)
-    year_tips   = year_df["Tips Earned"].sum()
-    year_total  = year_df["Total Earned"].sum()
+    year_tips   = year_df[th_tips_col].sum()
+    year_total  = year_df[th_total_col].sum()
 
     # ── Goals (editable in sidebar) ───────────────────────────────────────────
     with st.sidebar:
@@ -455,9 +491,9 @@ with tab2:
     # ── Big colorful metric cards ─────────────────────────────────────────────
     st.markdown("### 💰 This month")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💵 Total earned",   f"${month_total:,.2f}")
-    c2.metric("🤑 Tips earned",    f"${month_tips:,.2f}")
-    c3.metric("🏦 Tax set aside",  f"${month_tax:,.2f}")
+    c1.metric("🏠 Take-home total",   f"${month_total:,.2f}")
+    c2.metric("💵 Take-home tips",    f"${month_tips:,.2f}")
+    c3.metric("🏦 Tips tax set aside",  f"${month_tax:,.2f}")
     c4.metric("📈 Retirement",     f"${month_ret:,.2f}")
 
     col_a, col_b = st.columns(2)
@@ -472,7 +508,7 @@ with tab2:
     tip_pct_capped   = min(tip_pct, 100)
     total_pct        = min((month_total / total_goal * 100) if total_goal > 0 else 0, 100)
 
-    st.markdown(f"**💵 Tip goal** — ${month_tips:,.2f} of ${tip_goal:,.2f}")
+    st.markdown(f"**💵 Take-home tip goal** — ${month_tips:,.2f} of ${tip_goal:,.2f}")
     st.progress(int(tip_pct_capped))
     remaining_tips = max(0, tip_goal - month_tips)
     if remaining_tips > 0:
@@ -480,7 +516,7 @@ with tab2:
     else:
         st.caption("✅ Goal reached!")
 
-    st.markdown(f"**🏆 Total earnings goal** — ${month_total:,.2f} of ${total_goal:,.2f}")
+    st.markdown(f"**🏆 Total take-home goal** — ${month_total:,.2f} of ${total_goal:,.2f}")
     st.progress(int(total_pct))
     remaining_total = max(0, total_goal - month_total)
     if remaining_total > 0:
@@ -497,7 +533,7 @@ with tab2:
     if not year_df.empty:
         st.markdown("**Tips by month**")
         monthly = (
-            year_df.groupby(year_df["Date"].dt.month)["Tips Earned"]
+            year_df.groupby(year_df["Date"].dt.month)[th_tips_col]
             .sum().reset_index()
         )
         monthly.columns = ["Month", "Tips"]
@@ -526,8 +562,8 @@ with tab2:
     # ── Year totals ───────────────────────────────────────────────────────────
     st.markdown("### 📅 This year")
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("💵 Total earned",  f"${year_total:,.2f}")
-    c6.metric("🤑 Tips earned",   f"${year_tips:,.2f}")
+    c5.metric("🏠 Take-home total",  f"${year_total:,.2f}")
+    c6.metric("💵 Take-home tips",   f"${year_tips:,.2f}")
     c7.metric("🏦 Tax set aside", f"${year_df['Tax Set Aside'].sum():,.2f}")
     c8.metric("📈 Retirement",    f"${year_df['Retirement Set Aside'].sum():,.2f}")
 
@@ -597,11 +633,12 @@ with tab3:
         shift     = row.get("Shift Type", "")
         tips      = row.get("Tips Earned", 0)
         total     = row.get("Total Earned", 0)
+        hours     = row.get("Hours Worked", 0)
         busy      = row.get("Busy Rating", "")
         ts        = row.get("Timestamp", "")
         sheet_row = ts_to_row.get(str(ts), None)
 
-        with st.expander(f"📅 {date_str}  ·  {shift}  ·  Tips: ${tips:.2f}  ·  Total: ${total:.2f}"):
+        with st.expander(f"📅 {date_str}  ·  {shift}  ·  {float(hours):.2f} hrs  ·  Tips: ${float(tips):.2f}  ·  Total: ${float(total):.2f}"):
             c1, c2, c3, c4 = st.columns(4)
             c1.markdown(f"**Clock in**\n\n{row.get('Clock In','—')}")
             c2.markdown(f"**Clock out**\n\n{row.get('Clock Out','—')}")
