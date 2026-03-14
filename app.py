@@ -353,10 +353,9 @@ with tab1:
                 st.error(f"Could not save shift: {ex}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — BRITTANY'S DASHBOARD
+# TAB 2 — DASHBOARD
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.markdown("### Dashboard 📊")
     df = load_data()
 
     if df.empty or len(df) == 0:
@@ -367,39 +366,83 @@ with tab2:
     month_df = df[df["Date"].dt.month == now.month]
     year_df  = df[df["Date"].dt.year  == now.year]
 
-    # ── Summary metrics ───────────────────────────────────────────────────────
-    st.markdown("#### This month")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total earned",   f"${month_df['Total Earned'].sum():,.2f}")
-    c2.metric("Tips earned",    f"${month_df['Tips Earned'].sum():,.2f}")
-    c3.metric("Tax set aside",  f"${month_df['Tax Set Aside'].sum():,.2f}")
-    c4.metric("Retirement",     f"${month_df['Retirement Set Aside'].sum():,.2f}")
+    month_tips  = month_df["Tips Earned"].sum()
+    month_total = month_df["Total Earned"].sum()
+    month_tax   = month_df["Tax Set Aside"].sum()
+    month_ret   = month_df["Retirement Set Aside"].sum()
+    month_shifts= len(month_df)
+    year_tips   = year_df["Tips Earned"].sum()
+    year_total  = year_df["Total Earned"].sum()
 
-    st.markdown("#### This year")
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Total earned",   f"${year_df['Total Earned'].sum():,.2f}")
-    c6.metric("Tips earned",    f"${year_df['Tips Earned'].sum():,.2f}")
-    c7.metric("Tax set aside",  f"${year_df['Tax Set Aside'].sum():,.2f}")
-    c8.metric("Retirement",     f"${year_df['Retirement Set Aside'].sum():,.2f}")
+    # ── Goals (editable in sidebar) ───────────────────────────────────────────
+    with st.sidebar:
+        st.markdown("### 🎯 Monthly goals")
+        tip_goal   = st.number_input("Tip goal ($)",           min_value=0, value=2000, step=100)
+        total_goal = st.number_input("Total earnings goal ($)", min_value=0, value=3000, step=100)
+
+    # ── Motivational message ──────────────────────────────────────────────────
+    tip_pct = (month_tips / tip_goal * 100) if tip_goal > 0 else 0
+    if tip_pct >= 100:
+        msg = "🏆 GOAL CRUSHED! Tony you absolute legend! Take a bow!"
+    elif tip_pct >= 75:
+        msg = "🔥 So close!! You're on fire — keep it up Tony!"
+    elif tip_pct >= 50:
+        msg = "💪 Halfway there! You're doing amazing, keep grinding!"
+    elif tip_pct >= 25:
+        msg = "🚀 Great start! Every shift gets you closer — let's go!"
+    else:
+        msg = "✨ The month is young! Time to show them what you've got Tony!"
+
+    st.markdown(f"## {msg}")
+    st.markdown("---")
+
+    # ── Big colorful metric cards ─────────────────────────────────────────────
+    st.markdown("### 💰 This month")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("💵 Total earned",   f"${month_total:,.2f}")
+    c2.metric("🤑 Tips earned",    f"${month_tips:,.2f}")
+    c3.metric("🏦 Tax set aside",  f"${month_tax:,.2f}")
+    c4.metric("📈 Retirement",     f"${month_ret:,.2f}")
+
+    col_a, col_b = st.columns(2)
+    col_a.metric("📅 Shifts this month", month_shifts)
+    col_b.metric("⭐ Avg tips per shift", f"${(month_tips/month_shifts):,.2f}" if month_shifts > 0 else "$0.00")
 
     st.markdown("---")
 
-    # ── Sales metrics ─────────────────────────────────────────────────────────
-    if "All Sales" in df.columns and df["All Sales"].sum() > 0:
-        st.markdown("#### Sales summary (this month)")
-        c9, c10, c11 = st.columns(3)
-        c9.metric("All sales",   f"${month_df['All Sales'].sum():,.2f}")
-        c10.metric("Tip out",    f"${month_df['Tip Out'].sum():,.2f}")
-        c11.metric("Avg covers per shift", f"{month_df['Covers'].mean():.0f}")
-        st.markdown("---")
+    # ── Progress bars ─────────────────────────────────────────────────────────
+    st.markdown("### 🎯 Monthly goals")
 
-    # ── Monthly tips chart ────────────────────────────────────────────────────
-    st.markdown("#### Monthly tips")
+    tip_pct_capped   = min(tip_pct, 100)
+    total_pct        = min((month_total / total_goal * 100) if total_goal > 0 else 0, 100)
+
+    st.markdown(f"**💵 Tip goal** — ${month_tips:,.2f} of ${tip_goal:,.2f}")
+    st.progress(int(tip_pct_capped))
+    remaining_tips = max(0, tip_goal - month_tips)
+    if remaining_tips > 0:
+        st.caption(f"${remaining_tips:,.2f} to go — you've got this! 💪")
+    else:
+        st.caption("✅ Goal reached!")
+
+    st.markdown(f"**🏆 Total earnings goal** — ${month_total:,.2f} of ${total_goal:,.2f}")
+    st.progress(int(total_pct))
+    remaining_total = max(0, total_goal - month_total)
+    if remaining_total > 0:
+        st.caption(f"${remaining_total:,.2f} to go!")
+    else:
+        st.caption("✅ Goal reached!")
+
+    st.markdown("---")
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    st.markdown("### 📊 Charts")
+
+    # Monthly tips bar chart
     if not year_df.empty:
+        st.markdown("**Tips by month**")
         monthly = (
             year_df.groupby(year_df["Date"].dt.month)["Tips Earned"]
-            .sum()
-            .reset_index()
+            .sum().reset_index()
         )
         monthly.columns = ["Month", "Tips"]
         monthly["Month"] = monthly["Month"].apply(
@@ -407,38 +450,54 @@ with tab2:
         )
         st.bar_chart(monthly.set_index("Month"))
 
-    # ── Avg tips by shift type ────────────────────────────────────────────────
-    st.markdown("#### Average tips by shift type")
-    if not df.empty:
+    # Avg tips by shift type
+    if not df.empty and df["Shift Type"].nunique() > 1:
+        st.markdown("**Average tips by shift type**")
         shift_avg = df.groupby("Shift Type")["Tips Earned"].mean().reset_index()
         shift_avg.columns = ["Shift Type", "Avg Tips"]
         shift_avg["Avg Tips"] = shift_avg["Avg Tips"].round(2)
         st.bar_chart(shift_avg.set_index("Shift Type"))
 
-    # ── Tax & retirement ──────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### Tax & retirement summary (all time)")
-    c12, c13, c14 = st.columns(3)
-    c12.metric("Total tips earned",      f"${df['Tips Earned'].sum():,.2f}")
-    c13.metric("Total tax to set aside", f"${df['Tax Set Aside'].sum():,.2f}")
-    c14.metric("Total retirement",       f"${df['Retirement Set Aside'].sum():,.2f}")
+    # Busy rating breakdown
+    if not df.empty and "Busy Rating" in df.columns:
+        st.markdown("**Shifts by busy rating**")
+        busy_counts = df["Busy Rating"].value_counts().reset_index()
+        busy_counts.columns = ["Rating", "Shifts"]
+        st.bar_chart(busy_counts.set_index("Rating"))
 
     st.markdown("---")
+
+    # ── Year totals ───────────────────────────────────────────────────────────
+    st.markdown("### 📅 This year")
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("💵 Total earned",  f"${year_total:,.2f}")
+    c6.metric("🤑 Tips earned",   f"${year_tips:,.2f}")
+    c7.metric("🏦 Tax set aside", f"${year_df['Tax Set Aside'].sum():,.2f}")
+    c8.metric("📈 Retirement",    f"${year_df['Retirement Set Aside'].sum():,.2f}")
+
+    st.markdown("---")
+
+    # ── Sales summary ─────────────────────────────────────────────────────────
+    if "All Sales" in df.columns and month_df["All Sales"].sum() > 0:
+        st.markdown("### 🧾 Sales this month")
+        c9, c10, c11 = st.columns(3)
+        c9.metric("All sales",            f"${month_df['All Sales'].sum():,.2f}")
+        c10.metric("Tip out",             f"${month_df['Tip Out'].sum():,.2f}")
+        c11.metric("Avg covers per shift",f"{month_df['Covers'].mean():.0f}")
+        st.markdown("---")
 
     # ── Full shift log ────────────────────────────────────────────────────────
-    st.markdown("#### All shifts")
+    st.markdown("### 🗂️ All shifts")
     display_df = df.copy()
     display_df["Date"] = display_df["Date"].dt.strftime("%m/%d/%Y")
     for col in ["All Sales", "Tip Out", "Tips Earned", "Wages",
                 "Total Earned", "Tax Set Aside", "Retirement Set Aside"]:
         if col in display_df.columns:
             display_df[col] = display_df[col].apply(lambda x: f"${x:,.2f}")
-
     show_cols = ["Date", "Shift Type", "Clock In", "Clock Out", "Hours Worked",
                  "All Sales", "Tip Out", "Tips Earned", "Wages", "Total Earned",
                  "Tax Set Aside", "Retirement Set Aside", "Busy Rating", "Covers", "Notes"]
     show_cols = [c for c in show_cols if c in display_df.columns]
-
     st.dataframe(display_df[show_cols], use_container_width=True, hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
