@@ -94,13 +94,45 @@ def calc_hours(clock_in_t, clock_out_t):
 def parse_time_12h(s):
     if not s:
         return None
-    for fmt in ["%I:%M %p", "%I:%M%p", "%H:%M", "%I %p", "%I%p",
-                "%I:%M", "%-I:%M %p", "%-I %p"]:
-        try:
-            return datetime.strptime(s.strip().upper(), fmt).time()
-        except:
-            continue
-    return None
+    import re
+    s = s.strip().upper().replace(" ", "").replace(":", "")
+    # Extract AM/PM
+    ampm = None
+    if s.endswith("AM"):
+        ampm = "AM"; s = s[:-2]
+    elif s.endswith("PM"):
+        ampm = "PM"; s = s[:-2]
+    elif s.endswith("A"):
+        ampm = "AM"; s = s[:-1]
+    elif s.endswith("P"):
+        ampm = "PM"; s = s[:-1]
+    if not s.isdigit():
+        return None
+    # Parse digits into hour/minute
+    if len(s) <= 2:
+        hour = int(s); minute = 0
+    elif len(s) == 3:
+        hour = int(s[0]); minute = int(s[1:])
+    elif len(s) == 4:
+        hour = int(s[:2]); minute = int(s[2:])
+    else:
+        return None
+    if not ampm:
+        # 10:30-11:59 = AM, everything else (12-10:29) = PM
+        if hour == 10 and minute >= 30:
+            ampm = "AM"
+        elif hour == 11:
+            ampm = "AM"
+        else:
+            ampm = "PM"
+    if hour == 12:
+        hour = 0 if ampm == "AM" else 12
+    elif ampm == "PM":
+        hour += 12
+    try:
+        return time(hour % 24, minute)
+    except:
+        return None
 
 def fmt_12h(t):
     """Format a time object as 12-hour string for display."""
@@ -117,6 +149,8 @@ if "clock_in_val" not in st.session_state:
     st.session_state.clock_in_val = ""
 if "clock_out_val" not in st.session_state:
     st.session_state.clock_out_val = ""
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "log"""
 
 # ── Password screen ───────────────────────────────────────────────────────────
 if not st.session_state.authenticated:
@@ -132,6 +166,8 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ── Main app ──────────────────────────────────────────────────────────────────
+# Set default tab based on session state
+_tab_index = {"log": 0, "dashboard": 1, "history": 2}.get(st.session_state.get("active_tab","log"), 0)
 tab1, tab2, tab3 = st.tabs(["📋 Log a Shift", "📊 Dashboard", "📅 Shift History"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -185,10 +221,18 @@ with tab1:
         c13.metric("Retirement set aside this month", f"${month_df['Retirement Set Aside'].sum():.2f}")
 
         st.markdown("---")
-        if st.button("Log another shift", use_container_width=True):
-            st.session_state.submitted  = False
-            st.session_state.last_entry = {}
-            st.rerun()
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("📋 Log another shift", use_container_width=True):
+                st.session_state.submitted  = False
+                st.session_state.last_entry = {}
+                st.rerun()
+        with col_btn2:
+            if st.button("📊 Go to Dashboard", use_container_width=True):
+                st.session_state.submitted  = False
+                st.session_state.last_entry = {}
+                st.session_state.active_tab = "dashboard"
+                st.rerun()
         st.stop()
 
     # ── Form (no st.form wrapper — prevents enter-to-submit) ─────────────────
@@ -213,21 +257,24 @@ with tab1:
             key="f_shift"
         )
 
-        # Clock in / out — native time picker
+        # Clock in / out — smart text input, no military time
         st.markdown("**Clock in / Clock out**")
-        st.caption("⏱️ Round down to the nearest 15 minute increment — e.g. if you got off at 9:18 choose 9:15")
+        st.caption("Just type it simply — like **11am**, **4pm**, **330pm**, or **1145am**")
         col1, col2 = st.columns(2)
         with col1:
-            clock_in  = st.time_input("Clock in",  value=None, step=60*15, key="f_clock_in")
+            clock_in_raw  = st.text_input("Clock in",  placeholder="e.g. 11am", key="f_clock_in")
         with col2:
-            clock_out = st.time_input("Clock out", value=None, step=60*15, key="f_clock_out")
+            clock_out_raw = st.text_input("Clock out", placeholder="e.g. 4pm",  key="f_clock_out")
 
+        clock_in  = parse_time_12h(clock_in_raw)
+        clock_out = parse_time_12h(clock_out_raw)
         if clock_in and clock_out:
             hours_preview = calc_hours(clock_in, clock_out)
-            # Display in 12-hour format
             def to_12h(t):
                 return t.strftime("%I:%M %p").lstrip("0")
-            st.caption(f"Hours worked: {hours_preview:.2f} hrs  ·  {to_12h(clock_in)} → {to_12h(clock_out)}")
+            st.caption(f"⏰ {to_12h(clock_in)} → {to_12h(clock_out)}  ·  {hours_preview:.2f} hrs worked")
+        elif clock_in_raw or clock_out_raw:
+            st.caption("Hmm, couldn't read that time. Try something like 11am or 330pm")
 
         # Sales section
         st.markdown("**Sales**")
@@ -308,8 +355,10 @@ with tab1:
             expected_wage_tax = round(wages * TAX_RATE, 2)
             tax_gap       = max(0, round(expected_wage_tax - wages, 2))
 
-            clock_in_str  = clock_in.strftime("%I:%M %p").lstrip("0")
-            clock_out_str = clock_out.strftime("%I:%M %p").lstrip("0")
+            def to_12h(t):
+                return t.strftime("%I:%M %p").lstrip("0")
+            clock_in_str  = to_12h(clock_in)
+            clock_out_str = to_12h(clock_out)
 
             row = [
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
